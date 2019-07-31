@@ -22,6 +22,8 @@ class Parse
     const STATE_END_ADDRESS = 10;
     const STATE_START = 11;
 
+    const VALID_CHARACTERS_REGEX = 'A-Za-z0-9\_\-\!\#\$\%\&\'\*\+\/\=\?\^\`\{\|\}\~';
+
     /**
      * @var Parse
      */
@@ -425,7 +427,7 @@ class Parse
                         $emailAddress['invalid'] = true;
                         $emailAddress['invalid_reason'] = 'Stray period found in email address.  If the period is part of a person\'s name, it must appear in double quotes - e.g. "John Q. Public". Otherwise, an email address shouldn\'t begin with a period.';
                     }
-                } elseif (preg_match('/[A-Za-z0-9\_\-\!\#\$\%\&\'\*\+\/\=\?\^\`\{\|\}\~]/', $curChar)) {
+                } elseif (preg_match('/['. self::VALID_CHARACTERS_REGEX .']/', $curChar)) {
                     // see RFC 2822
 
                     // Note: check for Exim-banned characters
@@ -480,6 +482,20 @@ class Parse
                         if ($emailAddress['invalid']) {
                             $emailAddress['invalid_reason'] = "Invalid character found in domain of email address (please put in quotes if needed): '${curChar}'";
                         }
+                    } elseif ($subState === self::STATE_START) {
+                        if ($emailAddress['quote_temp']) {
+                            $emailAddress['address_temp'] .= $emailAddress['quote_temp'];
+                            $emailAddress['address_temp_quoted'] = true;
+                            $emailAddress['quote_temp'] = '';
+                        }
+                        $emailAddress['address_temp'] .= $curChar;
+                    } elseif ($subState === self::STATE_NAME) {
+                        if ($emailAddress['quote_temp']) {
+                            $emailAddress['name_parsed'] .= $emailAddress['quote_temp'];
+                            $emailAddress['quote_temp'] = '';
+                            $emailAddress['name_quoted'] = true;
+                        }
+                        $emailAddress['name_parsed'] .= $curChar;
                     } else {
                         $emailAddress['invalid'] = true;
                         $emailAddress['invalid_reason'] = "Invalid character found in email address (please put in quotes if needed): '${curChar}'";
@@ -594,6 +610,10 @@ class Parse
                 $reason = 'Invalid email address';
                 $success = false;
             }
+        }
+        if (!$emailAddress['invalid'] && !preg_match('/^['. self::VALID_CHARACTERS_REGEX .'\. ]+$/', $emailAddress['local_part_parsed'])) {
+            $emailAddress['invalid'] = true;
+            $emailAddress['invalid_reason'] = "Invalid character found in email address local part";
         }
 
         // Did we find no email addresses at all?
